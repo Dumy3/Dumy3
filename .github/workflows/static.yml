@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="AC+PLUS es una tienda simple para publicar productos, cuentas y servicios con contacto directo." />
+    <title>AC+PLUS</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css" />
+</head>
+
+<body>
+    <div class="app-shell">
+        <header class="topbar">
+            <div class="brand">
+                <div class="brand__mark">A+</div>
+                <div>
+                    <h1>AC+PLUS</h1>
+                </div>
+            </div>
+            <div class="topbar__actions">
+                <button id="themeToggle" class="btn btn--ghost">🌙 Modo oscuro</button>
+                <button id="openAuthBtn" class="btn">Login</button>
+                <button id="adminPanelBtn" class="btn btn--ghost hidden">Panel</button>
+            </div>
+        </header>
+
+        <main>
+            <section class="hero">
+                <div class="hero__copy">
+                    <p class="eyebrow">AC+PLUS</p>
+                    <h2>AC+PLUS, la mejor manera de comprar.</h2>
+                    <p>
+                        Descubre productos, cuentas y servicios de forma sencilla y confiable.
+                    </p>
+                    <div class="hero__actions">
+                        <button id="browseBtn" class="btn">Ver productos</button>
+                        <button id="loginHeroBtn" class="btn btn--ghost">Login</button>
+                    </div>
+                </div>
+                <div class="hero__card">
+                    <div class="stat">
+                        <strong id="productCount">0</strong>
+                        <span>productos</span>
+                    </div>
+                    <div class="stat">
+                        <strong id="categoryCount">0</strong>
+                        <span>categorías</span>
+                    </div>
+                    <div class="stat">
+                        <strong id="orderCount">0</strong>
+                        <span>ventas</span>
+                    </div>
+                </div>
+            </section>
+
+            <section id="categoriesSection" class="section section--soft hidden">
+                <div class="section-head">
+                    <h3>Categorías</h3>
+                    <span class="muted">Se mostrarán aquí cuando un administrador agregue una categoría.</span>
+                </div>
+                <div id="categoriesList" class="chips"></div>
+            </section>
+
+            <section id="productsSection" class="section">
+                <div class="section-head">
+                    <h3>Productos destacados</h3>
+                    <div class="section-head__controls">
+                        <input id="searchInput" type="search" placeholder="Buscar producto" />
+                        <select id="sortSelect">
+                <option value="default">Ordenar</option>
+                <option value="price-asc">Precio: menor a mayor</option>
+                <option value="price-desc">Precio: mayor a menor</option>
+              </select>
+                    </div>
+                </div>
+                <div id="productsGrid" class="products-grid"></div>
+            </section>
+
+            <section id="adminSection" class="section admin-panel hidden">
+                <div class="section-head">
+                    <h3>Panel de administración</h3>
+                    <button id="toggleAdminFormsBtn" class="btn btn--ghost">Mostrar formularios</button>
+                </div>
+                <div id="adminFormsContainer" class="admin-forms hidden">
+                    <div class="card">
+                        <h4>Agregar categoría</h4>
+                        <form id="categoryForm" class="stacked-form">
+                            <input id="categoryName" name="name" placeholder="Nombre de la categoría" required />
+                            <textarea id="categoryDescription" name="description" placeholder="Descripción" required></textarea>
+                            <input id="categoryImage" name="image" placeholder="URL de imagen" required />
+                            <button type="submit" class="btn">Guardar categoría</button>
+                        </form>
+                    </div>
+
+                    <div class="card">
+                        <h4>Agregar objeto</h4>
+                        <form id="productForm" class="stacked-form">
+                            <input id="productName" name="name" placeholder="Nombre del objeto" required />
+                            <input id="productImage" name="image" placeholder="URL de imagen" required />
+                            <textarea id="productDescription" name="description" placeholder="Descripción" required></textarea>
+                            <select id="productCategory" name="categoryId" required></select>
+                            <input id="productPhone" name="contactPhone" type="tel" placeholder="Número de teléfono" required />
+                            <input id="productDiscord" name="contactDiscord" placeholder="Usuario de Discord" required />
+                            <button type="submit" class="btn">Guardar objeto</button>
+                        </form>
+                    </div>
+                </div>
+
+                <div class="admin-grid">
+                    <div class="card">
+                        <h4>Categorías creadas</h4>
+                        <div id="adminCategoriesList" class="list"></div>
+                    </div>
+                    <div class="card">
+                        <h4>Objetos creados</h4>
+                        <div id="adminProductsList" class="list"></div>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <footer class="footer">
+            <p>Todos los derechos comprados hasta 2030 por el equipo de AC+PLUS.</p>
+        </footer>
+    </div>
+
+    <div id="authModal" class="modal hidden">
+        <div class="modal__card">
+            <button id="closeAuthModal" class="modal__close">✕</button>
+            <h3>Acceso de administrador</h3>
+            <form id="loginForm" class="stacked-form">
+                <input id="loginEmail" placeholder="Correo o usuario" required />
+                <input id="loginPassword" type="password" placeholder="Contraseña" required />
+                <button type="submit" class="btn">Entrar</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="productModal" class="modal hidden">
+        <div class="modal__card">
+            <button id="closeProductModal" class="modal__close">✕</button>
+            <div id="productModalContent"></div>
+        </div>
+    </div>
+
+    <div id="toast" class="toast"></div>
+
+    <script src="app.js"></script>
+</body>
+
+</html>
