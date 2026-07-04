@@ -1,0 +1,658 @@
+const STORAGE_KEYS = {
+    theme: 'acplus-theme',
+    state: 'acplus-state'
+};
+
+const demoAdminEmail = 'reyripban@gmail.com';
+const demoAdminPassword = 'Adm1n!V3rso#2026';
+
+function defaultState() {
+    return {
+        theme: 'dark',
+        admins: [],
+        categories: [],
+        products: [],
+        orders: [],
+        currentUser: null,
+        contactConfig: { email: demoAdminEmail, phone: '' }
+    };
+}
+
+let state = defaultState();
+let selectedCategory = 'all';
+let productToBuy = null;
+const els = {};
+
+function generateId(prefix) {
+    return `${prefix}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
+function hashPassword(password) {
+    let hash = 0;
+    for (let i = 0; i < password.length; i += 1) {
+        hash = (hash << 5) - hash + password.charCodeAt(i);
+        hash |= 0;
+    }
+    return Math.abs(hash).toString(16);
+}
+
+function loadState() {
+    try {
+        const saved = localStorage.getItem(STORAGE_KEYS.state);
+        return saved ? JSON.parse(saved) : null;
+    } catch (error) {
+        console.warn('No se pudo leer el estado', error);
+        return null;
+    }
+}
+
+function saveState() {
+    localStorage.setItem(STORAGE_KEYS.state, JSON.stringify(state));
+}
+
+function setTheme(theme) {
+    state.theme = theme;
+    document.body.classList.toggle('light', theme === 'light');
+    document.body.setAttribute('data-theme', theme);
+    localStorage.setItem(STORAGE_KEYS.theme, theme);
+    saveState();
+    if (els.themeToggle) {
+        els.themeToggle.textContent = theme === 'dark' ? '🌙 Modo oscuro' : '☀️ Modo claro';
+        els.themeToggle.setAttribute('aria-pressed', String(theme === 'light'));
+    }
+    renderAdminPanel();
+    renderProducts();
+}
+
+function showToast(message) {
+    if (!els.toast) return;
+    els.toast.textContent = message;
+    els.toast.classList.add('show');
+    window.clearTimeout(showToast.timer);
+    showToast.timer = window.setTimeout(() => {
+        els.toast.classList.remove('show');
+    }, 2200);
+}
+
+function normalizeState(saved) {
+    const base = defaultState();
+    const normalized = {
+        theme: 'dark',
+        admins: [],
+        categories: [],
+        products: [],
+        orders: [],
+        currentUser: null,
+        contactConfig: { email: demoAdminEmail, phone: '' }
+    };
+
+    if (saved) {
+        normalized.theme = saved.theme || 'dark';
+        normalized.admins = Array.isArray(saved.admins) ? saved.admins : [];
+        normalized.categories = Array.isArray(saved.categories) ? saved.categories : [];
+        normalized.products = Array.isArray(saved.products) ? saved.products : [];
+        normalized.orders = Array.isArray(saved.orders) ? saved.orders : [];
+        normalized.currentUser = saved.currentUser || null;
+        normalized.contactConfig = {
+            email: saved.contactConfig && saved.contactConfig.email ? saved.contactConfig.email : demoAdminEmail,
+            phone: saved.contactConfig && saved.contactConfig.phone ? saved.contactConfig.phone : ''
+        };
+    }
+
+    return Object.assign(base, normalized);
+}
+
+function ensureDefaults() {
+    const storedState = loadState();
+    state = normalizeState(storedState || defaultState());
+
+    if (!state.contactConfig || !state.contactConfig.email) {
+        state.contactConfig = { email: demoAdminEmail, phone: '' };
+    }
+
+    if (!state.admins.length) {
+        state.admins.push({
+            id: generateId('admin'),
+            email: demoAdminEmail,
+            passwordHash: hashPassword(demoAdminPassword),
+            role: 'admin',
+            createdAt: new Date().toISOString()
+        });
+    }
+
+    if (!state.categories) state.categories = [];
+    if (!state.products) state.products = [];
+    if (!state.orders) state.orders = [];
+
+    state.theme = state.theme || 'dark';
+    saveState();
+}
+
+function bindElements() {
+    els.themeToggle = document.getElementById('themeToggle');
+    els.openAuthBtn = document.getElementById('openAuthBtn');
+    els.adminPanelBtn = document.getElementById('adminPanelBtn');
+    els.authModal = document.getElementById('authModal');
+    els.closeAuthModal = document.getElementById('closeAuthModal');
+    els.loginForm = document.getElementById('loginForm');
+    els.googleLoginBtn = document.getElementById('googleLoginBtn');
+    els.productModal = document.getElementById('productModal');
+    els.closeProductModal = document.getElementById('closeProductModal');
+    els.productModalContent = document.getElementById('productModalContent');
+    els.categoriesSection = document.getElementById('categoriesSection');
+    els.categoriesList = document.getElementById('categoriesList');
+    els.productsGrid = document.getElementById('productsGrid');
+    els.adminSection = document.getElementById('adminSection');
+    els.adminFormsContainer = document.getElementById('adminFormsContainer');
+    els.toggleAdminFormsBtn = document.getElementById('toggleAdminFormsBtn');
+    els.categoryForm = document.getElementById('categoryForm');
+    els.productForm = document.getElementById('productForm');
+    els.adminForm = document.getElementById('adminForm');
+    els.contactConfigForm = document.getElementById('contactConfigForm');
+    els.notifyEmail = document.getElementById('notifyEmail');
+    els.notifyPhone = document.getElementById('notifyPhone');
+    els.adminCategoriesList = document.getElementById('adminCategoriesList');
+    els.adminProductsList = document.getElementById('adminProductsList');
+    els.adminsList = document.getElementById('adminsList');
+    els.ordersList = document.getElementById('ordersList');
+    els.toast = document.getElementById('toast');
+    els.searchInput = document.getElementById('searchInput');
+    els.sortSelect = document.getElementById('sortSelect');
+    els.productCount = document.getElementById('productCount');
+    els.categoryCount = document.getElementById('categoryCount');
+    els.orderCount = document.getElementById('orderCount');
+    els.browseBtn = document.getElementById('browseBtn');
+    els.loginHeroBtn = document.getElementById('loginHeroBtn');
+    els.productCategory = document.getElementById('productCategory');
+}
+
+function renderStats() {
+    if (els.productCount) {
+        els.productCount.textContent = state.products.filter((product) => product.visible !== false).length;
+    }
+    if (els.categoryCount) {
+        els.categoryCount.textContent = state.categories.length;
+    }
+    if (els.orderCount) {
+        els.orderCount.textContent = state.orders.length;
+    }
+}
+
+function populateProductCategorySelect() {
+    if (!els.productCategory) return;
+    els.productCategory.innerHTML = '';
+
+    if (!state.categories.length) {
+        const option = document.createElement('option');
+        option.value = '';
+        option.textContent = 'Crea una categoría primero';
+        els.productCategory.appendChild(option);
+        return;
+    }
+
+    state.categories.forEach((category) => {
+        const option = document.createElement('option');
+        option.value = category.id;
+        option.textContent = category.name;
+        els.productCategory.appendChild(option);
+    });
+}
+
+function renderCategories() {
+    if (!els.categoriesSection || !els.categoriesList) return;
+    const hasCategories = state.categories.length > 0;
+    els.categoriesSection.classList.toggle('hidden', !hasCategories);
+    els.categoriesList.innerHTML = '';
+
+    if (!hasCategories) {
+        els.categoriesList.innerHTML = '<p class="muted">Añade una categoría para empezar a organizar tus productos.</p>';
+        populateProductCategorySelect();
+        return;
+    }
+
+    const chips = document.createElement('div');
+    chips.className = 'chips';
+
+    const allChip = document.createElement('button');
+    allChip.className = selectedCategory === 'all' ? 'chip active' : 'chip';
+    allChip.type = 'button';
+    allChip.textContent = 'Todo';
+    allChip.addEventListener('click', () => {
+        selectedCategory = 'all';
+        renderCategories();
+        renderProducts();
+    });
+    chips.appendChild(allChip);
+
+    state.categories.forEach((category) => {
+        const chip = document.createElement('button');
+        chip.className = selectedCategory === category.id ? 'chip active' : 'chip';
+        chip.type = 'button';
+        chip.textContent = category.name;
+        chip.addEventListener('click', () => {
+            selectedCategory = category.id;
+            renderCategories();
+            renderProducts();
+        });
+        chips.appendChild(chip);
+    });
+
+    els.categoriesList.appendChild(chips);
+    populateProductCategorySelect();
+}
+
+function renderProducts() {
+    if (!els.productsGrid || !els.searchInput || !els.sortSelect) return;
+
+    const search = els.searchInput.value.trim().toLowerCase();
+    const sort = els.sortSelect.value;
+    const visibleProducts = state.products.filter((product) => product.visible !== false);
+    const filtered = visibleProducts.filter((product) => {
+        const matchesCategory = selectedCategory === 'all' || product.categoryId === selectedCategory;
+        const matchesSearch = !search || product.name.toLowerCase().includes(search) || product.description.toLowerCase().includes(search);
+        return matchesCategory && matchesSearch;
+    });
+
+    const sorted = [...filtered].sort((a, b) => {
+        if (sort === 'price-asc') return a.price - b.price;
+        if (sort === 'price-desc') return b.price - a.price;
+        return 0;
+    });
+
+    if (!sorted.length) {
+        els.productsGrid.innerHTML = '<div class="card empty-state"><p>No hay productos disponibles por ahora.</p></div>';
+        return;
+    }
+
+    els.productsGrid.innerHTML = '';
+    sorted.forEach((product) => {
+                const category = state.categories.find((item) => item.id === product.categoryId);
+                const card = document.createElement('article');
+                card.className = 'product-card';
+                card.innerHTML = `
+      <img src="${product.image || 'https://images.unsplash.com/photo-1516321497487-e288fb19713f?auto=format&fit=crop&w=900&q=80'}" alt="${product.name}" />
+      <div class="product-card__body">
+        <div class="product-card__meta">
+          <span class="muted">${category ? category.name : 'Sin categoría'}</span>
+        </div>
+        <h4>${product.name}</h4>
+        <p>${product.description}</p>
+        <div class="contact-list">
+          ${product.contactPhone ? `<span>📱 ${product.contactPhone}</span>` : ''}
+          ${product.contactDiscord ? `<span>💬 ${product.contactDiscord}</span>` : ''}
+        </div>
+        <button class="btn buy-btn" type="button" data-product-id="${product.id}">Contactar</button>
+      </div>
+    `;
+        els.productsGrid.appendChild(card);
+    });
+
+    document.querySelectorAll('.buy-btn').forEach((button) => {
+        button.addEventListener('click', () => openBuyModal(button.dataset.productId));
+    });
+}
+
+function renderAdminPanel() {
+    if (!els.adminSection || !els.adminFormsContainer || !els.adminPanelBtn || !els.toggleAdminFormsBtn) return;
+
+    const isAdmin = Boolean(state.currentUser && state.currentUser.role === 'admin');
+    const isOpen = els.adminFormsContainer.dataset.opened === 'true';
+
+    els.adminPanelBtn.classList.toggle('hidden', !isAdmin);
+    els.adminSection.classList.toggle('hidden', !isAdmin);
+    els.adminSection.classList.toggle('active', isAdmin);
+    els.adminFormsContainer.classList.toggle('hidden', !isAdmin || !isOpen);
+    els.toggleAdminFormsBtn.textContent = isOpen ? 'Ocultar formularios' : 'Mostrar formularios';
+
+    if (!isAdmin) {
+        els.adminFormsContainer.dataset.opened = 'true';
+        els.adminFormsContainer.classList.add('hidden');
+        return;
+    }
+
+    els.adminCategoriesList.innerHTML = '';
+    const categoriesList = document.createElement('div');
+    categoriesList.className = 'list';
+
+    if (!state.categories.length) {
+        categoriesList.innerHTML = '<div class="list-item"><div class="list-item__text"><strong>No hay categorías aún</strong><small>Añade la primera desde el formulario.</small></div></div>';
+    } else {
+        state.categories.forEach((category) => {
+            const item = document.createElement('div');
+            item.className = 'list-item';
+            item.innerHTML = `
+              <div class="list-item__text">
+                <strong>${category.name}</strong>
+                <small>${category.description}</small>
+              </div>
+              <button class="btn btn--ghost" type="button" data-delete-category="${category.id}">Eliminar</button>
+            `;
+            categoriesList.appendChild(item);
+        });
+    }
+    els.adminCategoriesList.appendChild(categoriesList);
+
+    els.adminProductsList.innerHTML = '';
+    const productsList = document.createElement('div');
+    productsList.className = 'list';
+
+    if (!state.products.length) {
+        productsList.innerHTML = '<div class="list-item"><div class="list-item__text"><strong>No hay objetos aún</strong><small>Añade el primero desde el formulario.</small></div></div>';
+    } else {
+        state.products.forEach((product) => {
+            const item = document.createElement('div');
+            item.className = 'list-item';
+            item.innerHTML = `
+              <div class="list-item__text">
+                <strong>${product.name}</strong>
+                <small>${product.contactPhone || 'Sin teléfono'} · ${product.contactDiscord || 'Sin Discord'}</small>
+              </div>
+              <button class="btn btn--ghost" type="button" data-delete-product="${product.id}">Eliminar</button>
+            `;
+            productsList.appendChild(item);
+        });
+    }
+    els.adminProductsList.appendChild(productsList);
+
+    if (els.adminsList) els.adminsList.innerHTML = '';
+    if (els.ordersList) els.ordersList.innerHTML = '';
+}
+
+function syncContactForm() {
+    if (!els.notifyEmail || !els.notifyPhone) return;
+    els.notifyEmail.value = state.contactConfig && state.contactConfig.email ? state.contactConfig.email : demoAdminEmail;
+    els.notifyPhone.value = state.contactConfig && state.contactConfig.phone ? state.contactConfig.phone : '';
+}
+
+function updateAuthUI() {
+    if (!els.openAuthBtn || !els.adminPanelBtn || !els.adminSection || !els.adminFormsContainer) return;
+    const isAdmin = Boolean(state.currentUser && state.currentUser.role === 'admin');
+    if (!els.adminFormsContainer.dataset.opened) {
+        els.adminFormsContainer.dataset.opened = 'true';
+    }
+    els.openAuthBtn.textContent = state.currentUser ? `Salir · ${state.currentUser.email}` : 'Login';
+    els.adminPanelBtn.classList.toggle('hidden', !isAdmin);
+    els.adminSection.classList.toggle('hidden', !isAdmin);
+    els.adminSection.classList.toggle('active', isAdmin);
+    els.adminFormsContainer.classList.toggle('hidden', !isAdmin || els.adminFormsContainer.dataset.opened !== 'true');
+    renderAdminPanel();
+}
+
+function openAuthModal() {
+    if (els.authModal) els.authModal.classList.remove('hidden');
+}
+
+function closeAuthModal() {
+    if (els.authModal) els.authModal.classList.add('hidden');
+}
+
+function openBuyModal(productId) {
+    const product = state.products.find((entry) => entry.id === productId);
+    if (!product) return;
+    productToBuy = product;
+    els.productModalContent.innerHTML = `
+    <h3>${product.name}</h3>
+    <p>${product.description}</p>
+    <div class="contact-card">
+      <h4>Contacto</h4>
+      <div class="contact-list">
+        ${product.contactPhone ? `<span>📱 ${product.contactPhone}</span>` : ''}
+        ${product.contactDiscord ? `<span>💬 ${product.contactDiscord}</span>` : ''}
+      </div>
+    </div>
+    <form id="buyForm" class="stacked-form">
+      <input id="buyerName" placeholder="Tu nombre" required />
+      <input id="buyerEmail" type="email" placeholder="Tu correo" required />
+      <button type="submit" class="btn">Enviar solicitud</button>
+    </form>
+  `;
+    els.productModal.classList.remove('hidden');
+    const buyForm = document.getElementById('buyForm');
+    buyForm.addEventListener('submit', handleBuySubmit);
+}
+
+function closeBuyModal() {
+    if (els.productModal) els.productModal.classList.add('hidden');
+    productToBuy = null;
+}
+
+function handleBuySubmit(event) {
+    event.preventDefault();
+    const buyerName = document.getElementById('buyerName').value.trim();
+    const buyerEmail = document.getElementById('buyerEmail').value.trim();
+    if (!productToBuy) return;
+
+    const order = {
+        id: generateId('order'),
+        productId: productToBuy.id,
+        buyerName,
+        buyerEmail,
+        createdAt: new Date().toISOString(),
+        status: 'enviado'
+    };
+
+    state.orders.unshift(order);
+    saveState();
+    showToast('Solicitud enviada.');
+    closeBuyModal();
+    renderStats();
+    renderAdminPanel();
+}
+
+function handleLogin(event) {
+  event.preventDefault();
+  const email = document.getElementById('loginEmail').value.trim().toLowerCase();
+  const password = document.getElementById('loginPassword').value;
+  const passwordHash = hashPassword(password);
+  const admin = state.admins.find((entry) => entry.email.toLowerCase() === email && entry.passwordHash === passwordHash);
+
+  if (!admin) {
+    showToast('Correo o contraseña incorrectos');
+    return;
+  }
+
+  state.currentUser = { id: admin.id, email: admin.email, role: admin.role };
+  saveState();
+  updateAuthUI();
+  closeAuthModal();
+  showToast('Sesión iniciada');
+}
+
+function handleLogout() {
+  state.currentUser = null;
+  saveState();
+  updateAuthUI();
+  showToast('Sesión cerrada');
+}
+
+function handleGoogleLogin() {
+  showToast('Google Sign-In listo para activarse con tu Client ID');
+}
+
+function handleCategorySubmit(event) {
+  event.preventDefault();
+  const data = new FormData(event.currentTarget);
+  const category = {
+    id: generateId('cat'),
+    name: data.get('name').toString().trim(),
+    description: data.get('description').toString().trim(),
+    image: data.get('image').toString().trim()
+  };
+
+  if (!category.name || !category.description || !category.image) {
+    showToast('Completa todos los campos de la categoría');
+    return;
+  }
+
+  state.categories.unshift(category);
+  saveState();
+  event.currentTarget.reset();
+  renderCategories();
+  renderAdminPanel();
+  renderStats();
+  showToast('Categoría creada');
+}
+
+function handleProductSubmit(event) {
+  event.preventDefault();
+  const data = new FormData(event.currentTarget);
+  const product = {
+    id: generateId('prod'),
+    name: data.get('name').toString().trim(),
+    image: data.get('image').toString().trim(),
+    description: data.get('description').toString().trim(),
+    categoryId: data.get('categoryId').toString(),
+    contactPhone: data.get('contactPhone').toString().trim(),
+    contactDiscord: data.get('contactDiscord').toString().trim(),
+    visible: true
+  };
+
+  if (!product.name || !product.description || !product.image || !product.categoryId || !product.contactPhone || !product.contactDiscord) {
+    showToast('Completa nombre, descripción, foto, teléfono y Discord');
+    return;
+  }
+
+  state.products.unshift(product);
+  saveState();
+  event.currentTarget.reset();
+  renderProducts();
+  renderAdminPanel();
+  renderStats();
+  showToast('Objeto creado');
+}
+
+function handleContactConfigSubmit(event) {
+  event.preventDefault();
+  const email = document.getElementById('notifyEmail').value.trim();
+  const phone = document.getElementById('notifyPhone').value.trim().replace(/\D/g, '');
+  state.contactConfig = { email: email || demoAdminEmail, phone };
+  saveState();
+  showToast('Contacto guardado');
+}
+
+function handleAdminSubmit(event) {
+  event.preventDefault();
+  const email = document.getElementById('adminEmail').value.trim();
+  const password = document.getElementById('adminPassword').value;
+  if (!email || !password) return;
+  if (state.admins.some((admin) => admin.email.toLowerCase() === email.toLowerCase())) {
+    showToast('Ese administrador ya existe');
+    return;
+  }
+
+  state.admins.push({
+    id: generateId('admin'),
+    email,
+    passwordHash: hashPassword(password),
+    role: 'admin',
+    createdAt: new Date().toISOString()
+  });
+  saveState();
+  event.currentTarget.reset();
+  renderAdminPanel();
+  showToast('Administrador añadido');
+}
+
+function handleDelete(event) {
+  const button = event.target.closest('button');
+  if (!button) return;
+  const categoryId = button.dataset.deleteCategory;
+  const productId = button.dataset.deleteProduct;
+
+  if (categoryId) {
+    state.categories = state.categories.filter((category) => category.id !== categoryId);
+    state.products = state.products.filter((product) => product.categoryId !== categoryId);
+    saveState();
+    renderCategories();
+    renderProducts();
+    renderAdminPanel();
+    renderStats();
+    showToast('Categoría eliminada');
+  }
+
+  if (productId) {
+    state.products = state.products.filter((product) => product.id !== productId);
+    saveState();
+    renderProducts();
+    renderAdminPanel();
+    renderStats();
+    showToast('Producto eliminado');
+  }
+}
+
+function attachEvents() {
+  if (els.themeToggle) {
+    els.themeToggle.addEventListener('click', () => {
+      setTheme(state.theme === 'dark' ? 'light' : 'dark');
+    });
+  }
+
+  if (els.openAuthBtn) {
+    els.openAuthBtn.addEventListener('click', () => {
+      if (state.currentUser) {
+        handleLogout();
+      } else {
+        openAuthModal();
+      }
+    });
+  }
+
+  if (els.closeAuthModal) els.closeAuthModal.addEventListener('click', closeAuthModal);
+  if (els.authModal) {
+    els.authModal.addEventListener('click', (event) => {
+      if (event.target === els.authModal) closeAuthModal();
+    });
+  }
+  if (els.loginForm) els.loginForm.addEventListener('submit', handleLogin);
+  if (els.googleLoginBtn) els.googleLoginBtn.addEventListener('click', handleGoogleLogin);
+  if (els.closeProductModal) els.closeProductModal.addEventListener('click', closeBuyModal);
+  if (els.productModal) {
+    els.productModal.addEventListener('click', (event) => {
+      if (event.target === els.productModal) closeBuyModal();
+    });
+  }
+
+  if (els.browseBtn) {
+    els.browseBtn.addEventListener('click', () => {
+      document.getElementById('productsSection').scrollIntoView({ behavior: 'smooth' });
+    });
+  }
+  if (els.loginHeroBtn) els.loginHeroBtn.addEventListener('click', openAuthModal);
+
+  if (els.toggleAdminFormsBtn) {
+    els.toggleAdminFormsBtn.addEventListener('click', () => {
+      const isOpen = els.adminFormsContainer.dataset.opened === 'true';
+      els.adminFormsContainer.dataset.opened = String(!isOpen);
+      renderAdminPanel();
+    });
+  }
+
+  if (els.categoryForm) els.categoryForm.addEventListener('submit', handleCategorySubmit);
+  if (els.productForm) els.productForm.addEventListener('submit', handleProductSubmit);
+  if (els.contactConfigForm) els.contactConfigForm.addEventListener('submit', handleContactConfigSubmit);
+  if (els.adminForm) els.adminForm.addEventListener('submit', handleAdminSubmit);
+  if (els.adminCategoriesList) els.adminCategoriesList.addEventListener('click', handleDelete);
+  if (els.adminProductsList) els.adminProductsList.addEventListener('click', handleDelete);
+  if (els.searchInput) els.searchInput.addEventListener('input', renderProducts);
+  if (els.sortSelect) els.sortSelect.addEventListener('change', renderProducts);
+  if (els.adminPanelBtn) {
+    els.adminPanelBtn.addEventListener('click', () => {
+      document.getElementById('adminSection').scrollIntoView({ behavior: 'smooth' });
+    });
+  }
+}
+
+function init() {
+  bindElements();
+  ensureDefaults();
+  setTheme(localStorage.getItem(STORAGE_KEYS.theme) || state.theme || 'dark');
+  syncContactForm();
+  renderStats();
+  renderCategories();
+  renderProducts();
+  updateAuthUI();
+  renderAdminPanel();
+  attachEvents();
+}
+
+init();
